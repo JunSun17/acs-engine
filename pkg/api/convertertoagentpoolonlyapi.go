@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"strconv"
 
 	"github.com/Azure/acs-engine/pkg/api/agentPoolOnlyApi/v20170831"
 	"github.com/Azure/acs-engine/pkg/api/agentPoolOnlyApi/v20180331"
@@ -313,8 +314,7 @@ func convertV20180331AgentPoolOnlyProperties(obj *v20180331.Properties) *Propert
 	properties.HostedMasterProfile.DNSPrefix = obj.DNSPrefix
 	properties.HostedMasterProfile.FQDN = obj.FQDN
 
-	properties.OrchestratorProfile = convertV20180331AgentPoolOnlyOrchestratorProfile(obj.KubernetesVersion)
-	properties.OrchestratorProfile.KubernetesConfig = convertV20180331AgentPoolOnlyKubernetesConfig(obj.EnableRBAC)
+	properties.OrchestratorProfile = convertV20180331AgentPoolOnlyOrchestratorProfile(obj.KubernetesVersion, obj.EnableRBAC, obj.NetworkProfile)
 
 	properties.AgentPoolProfiles = make([]*AgentPoolProfile, len(obj.AgentPoolProfiles))
 	for i := range obj.AgentPoolProfiles {
@@ -370,10 +370,29 @@ func convertV20180331AgentPoolOnlyKubernetesConfig(enableRBAC *bool) *Kubernetes
 	}
 }
 
-func convertV20180331AgentPoolOnlyOrchestratorProfile(kubernetesVersion string) *OrchestratorProfile {
+func convertV20180331AgentPoolOnlyOrchestratorProfile(kubernetesVersion string, enableRBAC *bool, networkProfile *v20180331.NetworkProfile) *OrchestratorProfile {
+	kubernetesConfig := &KubernetesConfig{}
+
+	if enableRBAC == nil || *enableRBAC == true {
+		// We want default behavior to be true
+		kubernetesConfig.EnableRbac = helpers.PointerToBool(true)
+		kubernetesConfig.EnableSecureKubelet = helpers.PointerToBool(true)
+	} else {
+		kubernetesConfig.EnableRbac = helpers.PointerToBool(false)
+		kubernetesConfig.EnableSecureKubelet = helpers.PointerToBool(false)
+	}
+
+	if networkProfile != nil {
+		kubernetesConfig.NetworkPolicy = string(networkProfile.NetworkPlugin)
+		kubernetesConfig.ServiceCIDR = networkProfile.ServiceCidr
+		kubernetesConfig.DNSServiceIP = networkProfile.DNSServiceIP
+		kubernetesConfig.DockerBridgeSubnet = networkProfile.DockerBridgeCidr
+	}
+
 	return &OrchestratorProfile{
 		OrchestratorType:    Kubernetes,
 		OrchestratorVersion: common.GetSupportedKubernetesVersion(kubernetesVersion),
+		KubernetesConfig:    kubernetesConfig,
 	}
 }
 
@@ -386,6 +405,10 @@ func convertV20180331AgentPoolOnlyAgentPoolProfile(v20180331 *v20180331.AgentPoo
 	api.OSType = OSType(v20180331.OSType)
 	api.StorageProfile = v20180331.StorageProfile
 	api.VnetSubnetID = v20180331.VnetSubnetID
+	kubernetesConfig := &KubernetesConfig{
+		KubeletConfig: map[string]string{"--max-pods": strconv.Itoa(v20180331.MaxPods)},
+	}
+	api.KubernetesConfig = kubernetesConfig
 	api.Subnet = v20180331.GetSubnet()
 	api.AvailabilityProfile = availabilityProfile
 	return api
