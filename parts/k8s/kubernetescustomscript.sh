@@ -37,6 +37,8 @@ KUBECTL=/usr/local/bin/kubectl
 DOCKER=/usr/bin/docker
 CNI_BIN_DIR=/opt/cni/bin
 CUSTOM_SEARCH_DOMAIN_SCRIPT=/opt/azure/containers/setup-custom-search-domains.sh
+KUBECONFIGDIR=/home/${ADMINUSER}/.kube
+KUBECONFIGFILE=$KUBECONFIGDIR/config
 
 set +x
 ETCD_PEER_CERT=$(echo ${ETCD_PEER_CERTIFICATES} | cut -d'[' -f 2 | cut -d']' -f 1 | cut -d',' -f $((${MASTER_INDEX}+1)))
@@ -377,7 +379,7 @@ function ensureK8sControlPlane() {
         return
     fi
     wait_for_file 600 1 $KUBECTL || exit $ERR_FILE_WATCH_TIMEOUT
-    retrycmd_if_failure 600 1 20 $KUBECTL 2>/dev/null cluster-info || exit $ERR_K8S_RUNNING_TIMEOUT
+    retrycmd_if_failure 600 1 20 $KUBECTL --kubeconfig $KUBECONFIGFILE 2>/dev/null cluster-info || exit $ERR_K8S_RUNNING_TIMEOUT
     ensurePodSecurityPolicy
 }
 
@@ -386,12 +388,10 @@ function ensureEtcd() {
 }
 
 function writeKubeConfig() {
-    KUBECONFIGDIR=/home/$ADMINUSER/.kube
-    KUBECONFIGFILE=$KUBECONFIGDIR/config
     mkdir -p $KUBECONFIGDIR
     touch $KUBECONFIGFILE
-    chown $ADMINUSER:$ADMINUSER $KUBECONFIGDIR
-    chown $ADMINUSER:$ADMINUSER $KUBECONFIGFILE
+    chown ${ADMINUSER}:${ADMINUSER} $KUBECONFIGDIR
+    chown ${ADMINUSER}:${ADMINUSER} $KUBECONFIGFILE
     chmod 700 $KUBECONFIGDIR
     chmod 600 $KUBECONFIGFILE
 
